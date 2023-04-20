@@ -1,0 +1,10 @@
+{
+    "token": "Discord_Token",
+    "twitch_client_id": "",
+    "twitch_secret": "",
+    "servers": {
+        
+    },
+    "streamers": {
+    }
+}
