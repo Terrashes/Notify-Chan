@@ -64,11 +64,11 @@ async def on_guild_join(guild):
     config["servers"].update({
     str(guild.id) :
         {
-            "prefix": "n!", 
-            "joinMessageChannel": "", 
-            "leaveMessageChannel": "",
-            "joinMessage": "{} joined the server!", 
-            "leaveMessage": "{} left the server!",
+            "prefix" : "n!", 
+            "joinMessageChannel" : "", 
+            "leaveMessageChannel" : "",
+            "joinMessage" : "{} joined the server!", 
+            "leaveMessage" : "{} left the server!",
         }
     })
     writeConfig()
@@ -80,10 +80,11 @@ async def on_guild_remove(guild):
 
 
 @bot.command()
-async def onjoin(ctx, message=None):
+async def onjoin(ctx):
     config["servers"][str(ctx.guild.id)]["joinMessageChannel"] = str(ctx.channel.id)
     if (message == None):
         message = '{} just joined the server! Welcome!☺✋'
+
     config["servers"][str(ctx.guild.id)]["joinMessage"] = message
     writeConfig()
     await ctx.channel.send("Now notification about new members will be shown in this channel")
@@ -131,6 +132,10 @@ async def help(ctx):
     embed.add_field(
         name="`add` to add channel for tracking",
         value=(f'Sample: `n!add zxcursed`'), 
+        inline=False)
+    embed.add_field(
+        name="",
+        value=(f'To mention streamer while creating message use `$user`\nSample: $user is live!.'), 
         inline=False)
     embed.add_field(
         name="`remove` to remove channel from tracking",
@@ -242,45 +247,63 @@ def is_stream_live(streamerUsername):
 
 
 @bot.command()
-async def add(ctx, streamerUsername=None, messageLive="Hey everyone! {streamerUsername} is now live!", messageOff="{streamerUsername} is offline now"):
+async def add(ctx, streamerUsername=None):
     if streamerUsername:
+        messageLive=f"Hey everyone! {streamerUsername} is now live!" 
+        messageOff=f"{streamerUsername} is offline now"
         await ctx.channel.send("Please enter a message for when the streamer goes live:")
         def check(message):
             return message.author == ctx.author and message.channel == ctx.channel
         try:
-            messageLive = (await bot.wait_for("message", check=check, timeout=60)).content
-        except asyncio.TimeoutError:
-            await ctx.channel.send("You took too long to respond.")
-        await ctx.channel.send("Please enter a message for when the streamer goes offline:")
-        try:
-            messageOff = (await bot.wait_for("message", check=check, timeout=60)).content
-        except asyncio.TimeoutError:
-            await ctx.channel.send("You took too long to respond.")
-        try:
             TWITCH_API_URL = f"https://api.twitch.tv/helix/streams?user_login={streamerUsername}"
             headers = {
-                "Client-ID": TWITCH_CLIENT_ID,
-                "Authorization": f"Bearer {twitch_access_token}"
+                "Client-ID" : TWITCH_CLIENT_ID,
+                "Authorization" : f"Bearer {twitch_access_token}"
             }
             response = requests.get(TWITCH_API_URL, headers=headers)
             
             if response.status_code == 400:
                 await ctx.channel.send(f"Error: channel not found for {streamerUsername}")
             elif response.status_code == 200:
+                try:
+                    messageLive = (await bot.wait_for("message", check=check, timeout=60)).content
+                    if "$user" not in messageLive:
+                        messageLive += f" {streamerUsername}"
+                    else:
+                        messageLive = messageLive.replace("$user", streamerUsername)
+                except asyncio.TimeoutError:
+                    await ctx.channel.send("You took too long to respond.")
+                await ctx.channel.send("Please enter a message for when the streamer goes offline:")
+                try:
+                    messageOff = (await bot.wait_for("message", check=check, timeout=60)).content
+                    if "$user" not in messageOff:
+                        messageOff += f" {streamerUsername}"
+                    else:
+                        messageOff = messageOff.replace("$user", streamerUsername)
+                except asyncio.TimeoutError:
+                    await ctx.channel.send("You took too long to respond.")
                 if streamerUsername not in config["streamers"]:
                     config["streamers"].update({
                         str(streamerUsername) :
-                            {
-                                "status": False,
-                                "messageLive": messageLive,
-                                "messageOff": messageOff,
-                                "channels": [ctx.channel.id]
+                        {
+                            "status" : False,
+                            "channels" : {
+                                str(ctx.channel.id): {
+                                    "messageLive" : messageLive,
+                                    "messageOff" : messageOff
+                                }
                             }
-                        })
+                        }
+                    })
                     writeConfig()
                     await ctx.channel.send(f'Streamer `{streamerUsername}` added')
                 elif ctx.channel.id not in config["streamers"][streamerUsername]["channels"]:
-                    config["streamers"][streamerUsername]["channels"].append(ctx.channel.id)
+                    config["streamers"][streamerUsername]["channels"].update({
+                        str(ctx.channel.id): {
+                                    "messageLive" : messageLive,
+                                    "messageOff" : messageOff
+                        }
+                    })
                     writeConfig()
                     await ctx.channel.send(f'Streamer `{streamerUsername}` added')
                 else:
@@ -299,13 +322,13 @@ async def add(ctx, streamerUsername=None, messageLive="Hey everyone! {streamerUs
 async def remove(ctx, streamerUsername=None):
     if streamerUsername:
         try:
-            config["streamers"][streamerUsername]["channels"].remove(int(ctx.channel.id))
-            if len(["streamers"][streamerUsername]["channels"]) == 0:
+            del config["streamers"][streamerUsername]["channels"][str(ctx.channel.id)]
+            if len(config["streamers"][streamerUsername]["channels"]) == 0:
                 del config["streamers"][streamerUsername]
             writeConfig()
             await ctx.channel.send(f'Streamer `{streamerUsername}` deleted')
         except Exception as e:
-            print(f"{e}")
+            print(f"remove {e}")
             await ctx.channel.send(f"Error: channel not found for {streamerUsername}")
     else:
         await ctx.channel.send('Please, specify streamer\'s nickname to remove')
@@ -338,23 +361,23 @@ async def send_notification(streamerUsername):
     status = params[0]
     if status != streamer_info["status"]:
         try:
-            for channel in list(streamer_info["channels"]):
+            for channel in streamer_info["channels"].keys():
                 if channel is not None:
-                    channel = bot.get_channel(int(channel))
+                    channelId = bot.get_channel(int(channel))
                     if status:
                         title = params[1]
                         thumbnail = params[2]
                         embed = discord.Embed(
                             color=embedColor,
-                            title=config["streamers"][streamerUsername]['messageLive'], 
+                            title=config["streamers"][streamerUsername]['channels'][channel]['messageLive'], 
                             description="")
                         embed.add_field(
                             name=title,
                             value=f"https://www.twitch.tv/{streamerUsername}", inline=False)
                         embed.set_image(url=thumbnail)
-                        await channel.send(embed=embed)
+                        await channelId.send(embed=embed)
                     else:
-                        await channel.send(config["streamers"][streamerUsername]['messageOff'])
+                        await channelId.send(config["streamers"][streamerUsername]['channels'][channel]['messageOff'])
                 else:
                     print(f"Error: channel not found for {streamerUsername}")
             config["streamers"][streamerUsername]["status"] = status
@@ -367,14 +390,14 @@ async def send_notification(streamerUsername):
 async def send_notifications():
     while not bot.is_closed():
         try:
-            timeout=1
+            timeout=60
             if config["streamers"]:
                 for streamerUsername in config["streamers"]:
                     if config["streamers"][streamerUsername]["channels"]:
                         await send_notification(streamerUsername)
-                timeout = 1/len(config["streamers"])
-                if timeout < 1:
-                    timeout = 1
+                timeout = 60/len(config["streamers"])
+                if timeout < 10:
+                    timeout = 10
             await asyncio.sleep(timeout)
         except Exception as e:
             print(f"{e}")
