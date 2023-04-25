@@ -51,8 +51,6 @@ def beautifyDateDelta(date):
     return timeParams
 
 
-
-
 @bot.event
 async def on_ready():
     activity = discord.Game(name="n!help")
@@ -339,7 +337,7 @@ async def list(ctx):
     message = "**Streamers:**"
     for streamerUsername in config["streamers"]:
         try:
-            if ctx.channel.id in config["streamers"][streamerUsername]["channels"]:
+            if str(ctx.channel.id) in config["streamers"][streamerUsername]["channels"]:
                 if config['streamers'][streamerUsername]['status']:
                     status=":green_circle:`live`"
                 else:
