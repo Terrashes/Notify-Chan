@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "notify-chan"
+version = "0.1.0"
+description = ""
+authors = ["Ronynou <xinnce@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+aiohttp = "3.9.0b0"
+discord = "^2.3.2"
+requests = "^2.31.0"
+black = "^23.11.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
